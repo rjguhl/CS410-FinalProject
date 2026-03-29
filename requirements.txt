@@ -1,0 +1,10 @@
+requests
+pandas
+numpy
+scikit-learn
+gensim
+nltk
+vaderSentiment
+matplotlib
+seaborn
+streamlit
