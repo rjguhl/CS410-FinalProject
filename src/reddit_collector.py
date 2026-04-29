@@ -9,7 +9,7 @@ import requests
 import time
 import csv
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from categories import CATEGORIES
 
@@ -35,18 +35,27 @@ QUERIES = [(cat, kw) for cat, kws in CATEGORIES.items() for kw in kws]
 
 # Date range for collection (adjust as needed)
 # Format: YYYY-MM-DD
-DATE_AFTER = "2026-03-22"
-DATE_BEFORE = "2026-03-29"
+DATE_AFTER = "2026-04-01"
+DATE_BEFORE = "2026-04-29"
 
-# Max posts per (subreddit, keyword) combo
-# Arctic Shift API max per request is 100
+# Arctic Shift caps a single search response at 100 posts. For a long
+# date range with high-volume keywords (e.g. "Fed" on r/wallstreetbets),
+# 100 newest-first results would only cover a few days and we'd lose
+# everything older. We work around this by splitting the date range into
+# CHUNK_DAYS-long windows and querying each window separately.
+CHUNK_DAYS = 7
 LIMIT_PER_REQUEST = 100
 
-# Output file
-OUTPUT_FILE = "reddit_posts.csv"
+# Output file (separate from the old March pull so previous data isn't overwritten)
+OUTPUT_FILE = "reddit_posts_apr.csv"
 
-# Be polite to the API - seconds between requests
-DELAY_BETWEEN_REQUESTS = 1.0
+# Be polite to the free API - seconds between requests.
+# Bumped vs. the original (1.0s) since chunking means ~5x more queries;
+# slower pacing makes rate-limit blocks less likely.
+DELAY_BETWEEN_REQUESTS = 2.5
+
+# If a request errors out, wait this long and try once more before giving up.
+RETRY_DELAY = 15.0
 
 # ============================================================
 # Arctic Shift API base URL
@@ -70,17 +79,37 @@ def search_posts(subreddit: str, keyword: str, after: str, before: str, limit: i
         "fields": "id,title,selftext,author,subreddit,created_utc,score,num_comments,url,link_flair_text,over_18",
     }
 
-    try:
-        resp = requests.get(url, params=params, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("data", [])
-    except requests.exceptions.Timeout:
-        print(f"  [TIMEOUT] {subreddit} / '{keyword}' - try narrowing date range")
-        return []
-    except requests.exceptions.RequestException as e:
-        print(f"  [ERROR] {subreddit} / '{keyword}': {e}")
-        return []
+    # One-shot retry: if the first attempt errors (timeout, 429, 5xx),
+    # wait RETRY_DELAY seconds and try once more before giving up.
+    for attempt in (1, 2):
+        try:
+            resp = requests.get(url, params=params, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("data", [])
+        except requests.exceptions.RequestException as e:
+            if attempt == 1:
+                print(f"  [retry in {RETRY_DELAY:.0f}s: {e}]", end="", flush=True)
+                time.sleep(RETRY_DELAY)
+                continue
+            print(f"  [ERROR after retry] {subreddit} / '{keyword}': {e}")
+            return []
+    return []
+
+
+def iter_date_chunks(after: str, before: str, days: int):
+    """
+    Yield (chunk_after, chunk_before) date string pairs that tile the
+    [after, before] range in ~`days`-long windows. Lets us defeat the
+    100-post-per-response cap on hot keywords by querying week-by-week.
+    """
+    start = datetime.strptime(after, "%Y-%m-%d")
+    end = datetime.strptime(before, "%Y-%m-%d")
+    cur = start
+    while cur < end:
+        chunk_end = min(cur + timedelta(days=days), end)
+        yield cur.strftime("%Y-%m-%d"), chunk_end.strftime("%Y-%m-%d")
+        cur = chunk_end
 
 
 def unix_to_iso(ts) -> str:
@@ -95,40 +124,42 @@ def unix_to_iso(ts) -> str:
 
 def collect_all_posts():
     """
-    Main collection loop: iterate over all (subreddit, category, keyword)
-    triples, query Arctic Shift, deduplicate, and tag each post with the
-    category and keyword that first matched it.
+    Main collection loop: iterate over (date chunk, subreddit, category,
+    keyword) tuples, query Arctic Shift, deduplicate, and tag each post
+    with the category and keyword that first matched it.
     """
     all_posts = {}  # keyed by post ID to deduplicate (first-match wins)
-    total_queries = len(SUBREDDITS) * len(QUERIES)
+    chunks = list(iter_date_chunks(DATE_AFTER, DATE_BEFORE, CHUNK_DAYS))
+    total_queries = len(chunks) * len(SUBREDDITS) * len(QUERIES)
     query_num = 0
 
-    print(f"Starting collection: {len(SUBREDDITS)} subreddits x {len(QUERIES)} keywords = {total_queries} queries")
-    print(f"Date range: {DATE_AFTER} to {DATE_BEFORE}")
+    est_minutes = total_queries * DELAY_BETWEEN_REQUESTS / 60
+    print(f"Starting collection: {len(chunks)} date chunks x {len(SUBREDDITS)} subreddits x {len(QUERIES)} keywords = {total_queries} queries")
+    print(f"Date range: {DATE_AFTER} to {DATE_BEFORE} (chunked into {CHUNK_DAYS}-day windows)")
+    print(f"Pacing: {DELAY_BETWEEN_REQUESTS}s between requests (~{est_minutes:.0f} min total at no-error pace)")
     print(f"Output file: {OUTPUT_FILE}")
     print("=" * 60)
 
-    for subreddit in SUBREDDITS:
-        for category, keyword in QUERIES:
-            query_num += 1
-            print(f"[{query_num}/{total_queries}] r/{subreddit} [{category}] '{keyword}'", end="")
+    for chunk_after, chunk_before in chunks:
+        for subreddit in SUBREDDITS:
+            for category, keyword in QUERIES:
+                query_num += 1
+                print(f"[{query_num}/{total_queries}] {chunk_after}..{chunk_before} r/{subreddit} [{category}] '{keyword}'", end="")
 
-            posts = search_posts(subreddit, keyword, DATE_AFTER, DATE_BEFORE, LIMIT_PER_REQUEST)
+                posts = search_posts(subreddit, keyword, chunk_after, chunk_before, LIMIT_PER_REQUEST)
 
-            new_count = 0
-            for post in posts:
-                post_id = post.get("id", "")
-                if post_id and post_id not in all_posts:
-                    # Tag with the (category, keyword) that found it first.
-                    post["category"] = category
-                    post["search_keyword"] = keyword
-                    all_posts[post_id] = post
-                    new_count += 1
+                new_count = 0
+                for post in posts:
+                    post_id = post.get("id", "")
+                    if post_id and post_id not in all_posts:
+                        post["category"] = category
+                        post["search_keyword"] = keyword
+                        all_posts[post_id] = post
+                        new_count += 1
 
-            print(f" -> {len(posts)} results, {new_count} new (total: {len(all_posts)})")
+                print(f" -> {len(posts)} results, {new_count} new (total: {len(all_posts)})")
 
-            # Be polite to the free API
-            time.sleep(DELAY_BETWEEN_REQUESTS)
+                time.sleep(DELAY_BETWEEN_REQUESTS)
 
     print("=" * 60)
     print(f"Collection complete. {len(all_posts)} unique posts collected.")

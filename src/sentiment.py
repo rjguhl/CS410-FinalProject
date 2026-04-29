@@ -72,6 +72,28 @@ def add_sentiment(df: pd.DataFrame, text_column: str = TEXT_COLUMN) -> pd.DataFr
     return out
 
 
+def subtract_subreddit_baseline(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Center each post's compound score against the median compound of its
+    own subreddit. Reddit communities have very different baseline moods
+    (e.g. r/wallstreetbets is structurally negative), so raw VADER scores
+    overstate bearishness. After this step, "bullish" means more positive
+    than that subreddit's typical post — a more honest signal.
+
+    Keeps the raw VADER score as `sent_compound_raw` for transparency.
+    Re-derives `sent_label` from the adjusted score.
+    """
+    if "subreddit" not in df.columns:
+        return df  # nothing to baseline against
+
+    out = df.copy()
+    out["sent_compound_raw"] = out["sent_compound"]
+    medians = out.groupby("subreddit")["sent_compound"].transform("median")
+    out["sent_compound"] = out["sent_compound_raw"] - medians
+    out["sent_label"] = out["sent_compound"].apply(label_from_compound)
+    return out
+
+
 def backfill_category(df: pd.DataFrame, text_column: str = TEXT_COLUMN) -> pd.DataFrame:
     """
     Best-effort: tag posts with a category by matching keywords against
@@ -219,6 +241,9 @@ def main():
 
     print(f"Scoring sentiment on column '{TEXT_COLUMN}' with VADER ...")
     scored = add_sentiment(df)
+
+    print("Centering compound scores against each subreddit's median ...")
+    scored = subtract_subreddit_baseline(scored)
 
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     scored.to_csv(OUTPUT_FILE, index=False)
