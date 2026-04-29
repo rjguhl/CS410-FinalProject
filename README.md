@@ -31,3 +31,26 @@ This collects posts from relevant subreddits (r/economics, r/wallstreetbets, r/p
 4. **Sentiment Scoring** — VADER sentiment analysis on post text
 5. **Market Alignment** — Compare signals with Kalshi contract prices
 6. **Dashboard** — Streamlit visualization of signals vs. prices
+
+## Kalshi Market Search Dashboard
+
+A Kalshi-only prediction market search dashboard is included for exploring open markets by category and tag. The frontend is built with React and Vite and uses Kalshi's public API.
+
+### Run locally
+
+```bash
+npm install
+npm run dev
+```
+
+Then open the local Vite URL shown in the terminal.
+
+## Notes
+
+- The app uses a Vite proxy at `/api/kalshi` during local development so browser
+  requests can reach `https://api.elections.kalshi.com/trade-api/v2`.
+- Search is currently local over the loaded Kalshi category results because the
+  public market list endpoint supports filters like status and series ticker, but
+  not general full-text search.
+- The Kalshi notebook (`kalshi.ipynb`) remains useful for prototyping category,
+  tag, series, and market API calls before moving them into the website.
