@@ -1,0 +1,51 @@
+{
+  "Econ Daily": {
+    "n_posts": 27,
+    "mean_compound": -0.352,
+    "bullish_share": 0.222,
+    "bearish_share": 0.704,
+    "neutral_share": 0.074
+  },
+  "Fed": {
+    "n_posts": 13,
+    "mean_compound": -0.235,
+    "bullish_share": 0.308,
+    "bearish_share": 0.615,
+    "neutral_share": 0.077
+  },
+  "Global Central Banks": {
+    "n_posts": 1,
+    "mean_compound": 0.871,
+    "bullish_share": 1.0,
+    "bearish_share": 0.0,
+    "neutral_share": 0.0
+  },
+  "Growth": {
+    "n_posts": 7,
+    "mean_compound": -0.798,
+    "bullish_share": 0.143,
+    "bearish_share": 0.857,
+    "neutral_share": 0.0
+  },
+  "Housing": {
+    "n_posts": 5,
+    "mean_compound": -0.233,
+    "bullish_share": 0.4,
+    "bearish_share": 0.6,
+    "neutral_share": 0.0
+  },
+  "Inflation": {
+    "n_posts": 13,
+    "mean_compound": -0.533,
+    "bullish_share": 0.154,
+    "bearish_share": 0.769,
+    "neutral_share": 0.077
+  },
+  "Oil and energy": {
+    "n_posts": 56,
+    "mean_compound": -0.261,
+    "bullish_share": 0.25,
+    "bearish_share": 0.679,
+    "neutral_share": 0.071
+  }
+}

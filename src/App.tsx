@@ -30,6 +30,18 @@ type MarketSignal = {
   confidence: number;
 };
 
+// One row per Kalshi category, written by src/sentiment.py to
+// public/sentiment_summary.json. The keys (e.g. "Inflation", "Fed")
+// match Kalshi series tag names so we can join directly.
+type CategorySentiment = {
+  n_posts: number;
+  mean_compound: number;
+  bullish_share: number;
+  bearish_share: number;
+  neutral_share: number;
+};
+type SentimentSummary = Record<string, CategorySentiment>;
+
 type MarketGroup = {
   key: string;
   title: string;
@@ -44,18 +56,6 @@ type MarketGroup = {
 const ECONOMICS_CATEGORY = 'Economics';
 const SERIES_PAGE_SIZE = 9;
 const MIN_FILTER_LOADING_MS = 1000;
-
-const TOPIC_KEYWORDS: Record<string, string[]> = {
-  Economics: ['fed', 'inflation', 'jobs', 'gdp', 'rate cut', 'housing'],
-  Politics: ['trump', 'congress', 'policy', 'court', 'iran', 'shutdown'],
-  Elections: ['polls', 'primary', 'senate', 'house', 'candidate', 'turnout'],
-  Financials: ['stocks', 'nasdaq', 's&p', 'treasury', 'oil', 'dollar'],
-  Crypto: ['bitcoin', 'ethereum', 'solana', 'btc', 'etf', 'crypto'],
-  Companies: ['earnings', 'layoffs', 'ipo', 'ai', 'elon', 'product'],
-  Sports: ['winner', 'playoffs', 'score', 'championship', 'team', 'season'],
-  'Science and Technology': ['ai', 'space', 'nasa', 'energy', 'medicine', 'tech'],
-  'Climate and Weather': ['temperature', 'storm', 'rain', 'hurricane', 'climate', 'weather'],
-};
 
 const SEARCH_ALIASES: Record<string, string[]> = {
   inflation: ['inflation', 'cpi', 'pce', 'truflation', 'prices', 'price index'],
@@ -79,6 +79,26 @@ function App() {
   const [checkedSeries, setCheckedSeries] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sentimentSummary, setSentimentSummary] = useState<SentimentSummary>({});
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetch('/sentiment_summary.json')
+      .then((response) => (response.ok ? response.json() : {}))
+      .then((data: SentimentSummary) => {
+        if (isMounted) {
+          setSentimentSummary(data);
+        }
+      })
+      .catch(() => {
+        // No sentiment file yet — cards will show "No data" until sentiment.py is run.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -162,9 +182,16 @@ function App() {
 
   const filteredSeries = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    const hasSentiment = Object.keys(sentimentSummary).length > 0;
 
     return seriesItems.filter((series) => {
         if (emptySeries.has(series.ticker)) {
+          return false;
+        }
+
+        // Hide series that don't match any category we have sentiment for.
+        // Skipped while sentiment is still loading so the page doesn't flash empty.
+        if (hasSentiment && !(series.tags ?? []).some((tag) => sentimentSummary[tag])) {
           return false;
         }
 
@@ -186,7 +213,7 @@ function App() {
 
         return textMatchesAny(searchableText, queryTerms);
       });
-  }, [emptySeries, marketsBySeries, query, seriesItems]);
+  }, [emptySeries, marketsBySeries, query, seriesItems, sentimentSummary]);
 
   const marketGroups = useMemo(() => {
     return buildSeriesGroups(filteredSeries, marketsBySeries, loadingGroups);
@@ -397,7 +424,11 @@ function App() {
       </section>
 
       {selectedGroup && (
-        <MarketModal group={selectedGroup} onClose={() => setSelectedGroupKey('')} />
+        <MarketModal
+          group={selectedGroup}
+          onClose={() => setSelectedGroupKey('')}
+          sentimentSummary={sentimentSummary}
+        />
       )}
 
       <section className="signal-layer" id="signals">
@@ -461,7 +492,21 @@ function SeriesGroupCard({
   );
 }
 
-function MarketModal({ group, onClose }: { group: MarketGroup; onClose: () => void }) {
+function MarketModal({
+  group,
+  onClose,
+  sentimentSummary,
+}: {
+  group: MarketGroup;
+  onClose: () => void;
+  sentimentSummary: SentimentSummary;
+}) {
+  // Pick the first series tag that has sentiment data. Tag names like
+  // "Inflation", "Fed", "Housing" come straight from Kalshi and double as
+  // the category keys in sentiment_summary.json — no lookup table needed.
+  const matchedCategory = (group.tags ?? []).find((tag) => sentimentSummary[tag]);
+  const sentiment = matchedCategory ? sentimentSummary[matchedCategory] : undefined;
+
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <section
@@ -499,6 +544,8 @@ function MarketModal({ group, onClose }: { group: MarketGroup; onClose: () => vo
                 market={market}
                 seriesTicker={group.key}
                 seriesTitle={group.title}
+                sentiment={sentiment}
+                sentimentCategory={matchedCategory}
               />
             ))}
           </div>
@@ -530,14 +577,18 @@ function MarketCard({
   market,
   seriesTicker,
   seriesTitle,
+  sentiment,
+  sentimentCategory,
 }: {
   market: KalshiMarket;
   seriesTicker?: string;
   seriesTitle?: string;
+  sentiment?: CategorySentiment;
+  sentimentCategory?: string;
 }) {
   const probability = marketProbability(market);
   const kalshiUrl = marketUrl(market, seriesTitle, seriesTicker);
-  const signal = buildMarketSignal(market, probability);
+  const signal = sentiment ? buildSignalFromSentiment(sentiment, sentimentCategory) : null;
   const marketDetail = marketOutcomeDetail(market);
 
   return (
@@ -554,31 +605,43 @@ function MarketCard({
         <Metric label="Vol" value={formatMoney(marketVolume(market))} />
       </div>
 
-      <div className={`signal-preview ${signalClass(signal.direction)}`}>
-        <div className="signal-preview-header">
-          <span>Reddit signal preview</span>
-          <strong>{signal.direction}</strong>
-        </div>
-        <div className="signal-edge-row">
-          <span>Sentiment edge</span>
-          <strong>{formatEdge(signal.edge)}</strong>
-        </div>
-        <div className="signal-mini-grid">
-          <div>
-            <span>Posts</span>
-            <strong>{signal.relatedPosts}</strong>
+      {signal ? (
+        <div className={`signal-preview ${signalClass(signal.direction)}`}>
+          <div className="signal-preview-header">
+            <span>Reddit signal (VADER)</span>
+            <strong>{signal.direction}</strong>
           </div>
-          <div>
-            <span>Confidence</span>
-            <strong>{signal.confidence}%</strong>
+          <div className="signal-edge-row">
+            <span>Sentiment edge</span>
+            <strong>{formatEdge(signal.edge)}</strong>
+          </div>
+          <div className="signal-mini-grid">
+            <div>
+              <span>Posts</span>
+              <strong>{signal.relatedPosts}</strong>
+            </div>
+            <div>
+              <span>Confidence</span>
+              <strong>{signal.confidence}%</strong>
+            </div>
+          </div>
+          <div className="topic-tags" aria-label="Sentiment category">
+            {signal.topics.map((topic) => (
+              <span key={topic}>{topic}</span>
+            ))}
           </div>
         </div>
-        <div className="topic-tags" aria-label="Topic model keywords">
-          {signal.topics.map((topic) => (
-            <span key={topic}>{topic}</span>
-          ))}
+      ) : (
+        <div className="signal-preview signal-neutral">
+          <div className="signal-preview-header">
+            <span>Reddit signal</span>
+            <strong>No data</strong>
+          </div>
+          <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.7 }}>
+            No matching Reddit sentiment for this category yet.
+          </p>
         </div>
-      </div>
+      )}
 
       <div className="card-footer">
         <span>Closes {formatCloseDate(market.close_time || market.expiration_time)}</span>
@@ -697,42 +760,31 @@ function formatStrike(market: KalshiMarket) {
   return undefined;
 }
 
-function buildMarketSignal(market: KalshiMarket, probability: number | null): MarketSignal {
-  const text = `${market.title ?? ''} ${market.subtitle ?? ''} ${market.category ?? ''} ${market.series_ticker ?? ''}`;
-  const seed = hashText(text || market.ticker);
-  const baseProbability = probability ?? 50;
-  const sentimentProbability = clamp(baseProbability + ((seed % 25) - 12), 5, 95);
-  const edge = Math.round(sentimentProbability - baseProbability);
-  const direction = edge >= 5 ? 'Bullish YES' : edge <= -5 ? 'Bearish YES' : 'Neutral';
-  const relatedPosts = 12 + (seed % 86);
-  const confidence = clamp(45 + Math.abs(edge) * 4 + (seed % 12), 35, 94);
-  const topics = inferTopics(market, text, seed);
+// Build a market signal from real per-category VADER sentiment.
+// - direction: standard VADER thresholds on the mean compound score
+// - edge:      compound mapped linearly to a +/- percentage-point shift
+//              (compound 1.0 -> +50pp, compound -0.2 -> -10pp, etc.)
+// - posts:     n_posts in that category over the collection window
+// - confidence: share of non-neutral posts (polarity strength), in %
+function buildSignalFromSentiment(s: CategorySentiment, category?: string): MarketSignal {
+  const compound = s.mean_compound;
+  const direction: SignalDirection =
+    compound >= 0.05 ? 'Bullish YES' : compound <= -0.05 ? 'Bearish YES' : 'Neutral';
+  const edge = Math.round(compound * 50);
+  const confidence = Math.round((1 - s.neutral_share) * 100);
+  const topics = [
+    category ?? 'Reddit',
+    `compound ${compound.toFixed(2)}`,
+    `${Math.round(s.bullish_share * 100)}% bull / ${Math.round(s.bearish_share * 100)}% bear`,
+  ];
 
   return {
     direction,
     edge,
-    relatedPosts,
+    relatedPosts: s.n_posts,
     confidence,
     topics,
   };
-}
-
-function inferTopics(market: KalshiMarket, text: string, seed: number) {
-  const normalized = text.toLowerCase();
-  const categoryTopics = TOPIC_KEYWORDS[market.category ?? ''] ?? [];
-  const matchedTopics = categoryTopics.filter((topic) => normalized.includes(topic.split(' ')[0]));
-  const fallbackTopics = categoryTopics.length > 0 ? categoryTopics : ['market', 'probability', 'event'];
-  const rotatedTopics = fallbackTopics.slice(seed % Math.max(fallbackTopics.length, 1)).concat(fallbackTopics);
-
-  return Array.from(new Set([...matchedTopics, ...rotatedTopics])).slice(0, 3);
-}
-
-function hashText(value: string) {
-  return value.split('').reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 9973, 7);
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
 }
 
 function signalClass(direction: SignalDirection) {

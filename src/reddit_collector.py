@@ -3,10 +3,6 @@ Alpha-Seeker: Reddit Data Collector via Arctic Shift API
 =========================================================
 Collects Reddit posts from subreddits relevant to prediction markets
 (macroeconomic and political topics) using the Arctic Shift API.
-
-No API key required. Just run: python reddit_collector.py
-
-Output: reddit_posts.csv in the same directory
 """
 
 import requests
@@ -14,6 +10,8 @@ import time
 import csv
 import os
 from datetime import datetime
+
+from categories import CATEGORIES
 
 # Subreddits to scrape (relevant to prediction markets / macro / politics)
 SUBREDDITS = [
@@ -29,39 +27,11 @@ SUBREDDITS = [
     "technology",
 ]
 
-# Keywords to search for within each subreddit
-# These map to Kalshi/Polymarket contract topics
-KEYWORDS = [
-    # Economics (highest volume Kalshi contracts)
-    "Fed rate",
-    "inflation CPI",
-    "recession GDP",
-    "jobs report unemployment",
-    "housing market",
-    
-    # Financials
-    "S&P 500",
-    "oil prices",
-    "treasury bonds",
-    
-    # Politics
-    "Trump",
-    "Congress bill",
-    "Supreme Court",
-    "government shutdown",
-    
-    # Elections
-    "election polls",
-    
-    # Science & Tech
-    "AI artificial intelligence",
-    "SpaceX NASA",
-    
-    # Companies
-    "Elon Musk",
-    "IPO",
-    "tech layoffs",
-]
+# Keywords come from the shared category map (src/categories.py) so the
+# collector, sentiment aggregation, and Kalshi pulls all line up on the
+# same Kalshi Economics categories. Each query is a (category, keyword)
+# pair so we can tag every saved post with its category.
+QUERIES = [(cat, kw) for cat, kws in CATEGORIES.items() for kw in kws]
 
 # Date range for collection (adjust as needed)
 # Format: YYYY-MM-DD
@@ -125,22 +95,23 @@ def unix_to_iso(ts) -> str:
 
 def collect_all_posts():
     """
-    Main collection loop: iterate over all (subreddit, keyword) pairs,
-    query Arctic Shift, deduplicate, and save to CSV.
+    Main collection loop: iterate over all (subreddit, category, keyword)
+    triples, query Arctic Shift, deduplicate, and tag each post with the
+    category and keyword that first matched it.
     """
-    all_posts = {}  # keyed by post ID to deduplicate
-    total_queries = len(SUBREDDITS) * len(KEYWORDS)
+    all_posts = {}  # keyed by post ID to deduplicate (first-match wins)
+    total_queries = len(SUBREDDITS) * len(QUERIES)
     query_num = 0
 
-    print(f"Starting collection: {len(SUBREDDITS)} subreddits x {len(KEYWORDS)} keywords = {total_queries} queries")
+    print(f"Starting collection: {len(SUBREDDITS)} subreddits x {len(QUERIES)} keywords = {total_queries} queries")
     print(f"Date range: {DATE_AFTER} to {DATE_BEFORE}")
     print(f"Output file: {OUTPUT_FILE}")
     print("=" * 60)
 
     for subreddit in SUBREDDITS:
-        for keyword in KEYWORDS:
+        for category, keyword in QUERIES:
             query_num += 1
-            print(f"[{query_num}/{total_queries}] r/{subreddit} - '{keyword}'", end="")
+            print(f"[{query_num}/{total_queries}] r/{subreddit} [{category}] '{keyword}'", end="")
 
             posts = search_posts(subreddit, keyword, DATE_AFTER, DATE_BEFORE, LIMIT_PER_REQUEST)
 
@@ -148,6 +119,9 @@ def collect_all_posts():
             for post in posts:
                 post_id = post.get("id", "")
                 if post_id and post_id not in all_posts:
+                    # Tag with the (category, keyword) that found it first.
+                    post["category"] = category
+                    post["search_keyword"] = keyword
                     all_posts[post_id] = post
                     new_count += 1
 
@@ -174,13 +148,14 @@ def save_to_csv(posts: list, filepath: str):
         "selftext",
         "author",
         "created_utc",
-        "created_date",      # human-readable version
+        "created_date",
         "score",
         "num_comments",
         "url",
         "link_flair_text",
         "over_18",
-        "search_keyword",    # which keyword matched (for reference)
+        "category",          # Kalshi Economics category (the join key)
+        "search_keyword",    # which keyword inside that category matched
     ]
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:
@@ -201,6 +176,8 @@ def save_to_csv(posts: list, filepath: str):
                 "url": post.get("url", ""),
                 "link_flair_text": post.get("link_flair_text", ""),
                 "over_18": post.get("over_18", False),
+                "category": post.get("category", ""),
+                "search_keyword": post.get("search_keyword", ""),
             }
             writer.writerow(row)
 
@@ -242,6 +219,15 @@ def print_summary(posts: list):
         print(f"  Mean: {sum(scores) / len(scores):.1f}")
         print(f"  Max:  {max(scores)}")
         print(f"  Min:  {min(scores)}")
+
+    # Posts per category (the Kalshi join key)
+    cat_counts = {}
+    for p in posts:
+        cat = p.get("category", "uncategorized")
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    print(f"\nPosts per category:")
+    for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1]):
+        print(f"  {cat}: {count}")
 
     # Posts with selftext (body content)
     with_text = sum(1 for p in posts if p.get("selftext") and len(p["selftext"].strip()) > 0)
