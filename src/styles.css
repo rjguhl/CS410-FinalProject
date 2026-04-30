@@ -693,6 +693,69 @@ button {
   color: #b42318;
 }
 
+.sentiment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.sentiment-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.sentiment-badge-label {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.sentiment-badge-meta {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.signal-bullish.sentiment-badge {
+  background: #dcfce7;
+}
+
+.signal-bullish .sentiment-dot,
+.sentiment-badge.signal-bullish .sentiment-dot {
+  background: #15803d;
+}
+
+.signal-bullish.sentiment-badge .sentiment-badge-label {
+  color: #15803d;
+}
+
+.signal-bearish.sentiment-badge {
+  background: #fee2e2;
+}
+
+.sentiment-badge.signal-bearish .sentiment-dot {
+  background: #b42318;
+}
+
+.signal-bearish.sentiment-badge .sentiment-badge-label {
+  color: #b42318;
+}
+
+.signal-neutral.sentiment-badge {
+  background: #e2e8f0;
+}
+
+.sentiment-badge.signal-neutral .sentiment-dot {
+  background: #64748b;
+}
+
 .card-footer {
   margin-top: 18px;
   color: #94a3b8;

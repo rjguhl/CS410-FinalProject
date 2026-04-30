@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
 import {
   ArrowUpRight,
-  Gauge,
   Loader2,
-  MessageSquareText,
-  Network,
   Search,
 } from 'lucide-react';
 import {
@@ -26,7 +22,6 @@ type MarketSignal = {
   direction: SignalDirection;
   edge: number;
   relatedPosts: number;
-  topics: string[];
   confidence: number;
 };
 
@@ -407,6 +402,7 @@ function App() {
                   group={group}
                   key={group.key}
                   onToggle={() => toggleGroup(group.key)}
+                  sentimentSummary={sentimentSummary}
                 />
               ))}
             </div>
@@ -433,30 +429,16 @@ function App() {
 
       <section className="signal-layer" id="signals">
         <div className="signal-copy">
-          <p className="section-kicker">Alpha-Seeker Signal Layer Preview</p>
-          <h2>Connect market prices to Reddit text signals</h2>
+          <p className="section-kicker">How the signal is built</p>
+          <h2>Reddit sentiment, mapped to Kalshi categories</h2>
           <p>
-            Each market card includes a preview of the future pipeline: matched Reddit
-            posts, topic-model keywords, and a sentiment edge compared with Kalshi&apos;s
-            implied probability.
+            We collect Reddit posts from finance and economics subreddits, score
+            each with VADER, and center scores against each subreddit&apos;s own
+            median to control for community bias. Posts are tagged by Kalshi
+            category and aggregated, so every market here shows the live
+            sentiment for its category. Only categories with enough posts to be
+            meaningful are displayed.
           </p>
-        </div>
-        <div className="signal-explainer-grid">
-          <ExplainerCard
-            icon={<MessageSquareText />}
-            title="Related Reddit Posts"
-            text="Find posts whose title/body matches the market topic, category, ticker keywords, or event wording."
-          />
-          <ExplainerCard
-            icon={<Network />}
-            title="Topic Keywords"
-            text="Use LDA/topic modeling to summarize what the matched discussion is actually about."
-          />
-          <ExplainerCard
-            icon={<Gauge />}
-            title="Sentiment Edge"
-            text="Compare sentiment-implied probability with Kalshi probability to flag disagreement."
-          />
         </div>
       </section>
     </main>
@@ -466,10 +448,15 @@ function App() {
 function SeriesGroupCard({
   group,
   onToggle,
+  sentimentSummary,
 }: {
   group: MarketGroup;
   onToggle: () => void;
+  sentimentSummary: SentimentSummary;
 }) {
+  const matchedCategory = (group.tags ?? []).find((tag) => sentimentSummary[tag]);
+  const sentiment = matchedCategory ? sentimentSummary[matchedCategory] : undefined;
+
   return (
     <article className="series-group">
       <button className="series-group-button" onClick={onToggle} type="button">
@@ -483,6 +470,9 @@ function SeriesGroupCard({
               ? `${group.markets.length} active markets · closes ${formatGroupClose(group.earliestClose)}`
               : 'Click expand to load active markets'}
           </p>
+          {sentiment && matchedCategory && (
+            <SentimentBadge sentiment={sentiment} category={matchedCategory} />
+          )}
         </div>
         <div className="series-summary">
           <span className="expand-indicator">Expand</span>
@@ -490,6 +480,31 @@ function SeriesGroupCard({
       </button>
     </article>
   );
+}
+
+function SentimentBadge({
+  sentiment,
+  category,
+}: {
+  sentiment: CategorySentiment;
+  category: string;
+}) {
+  const direction = directionFromCompound(sentiment.mean_compound);
+  return (
+    <div className={`sentiment-badge ${signalClass(direction)}`}>
+      <span className="sentiment-dot" aria-hidden />
+      <span className="sentiment-badge-label">{direction}</span>
+      <span className="sentiment-badge-meta">
+        {category} · {sentiment.n_posts} posts
+      </span>
+    </div>
+  );
+}
+
+function directionFromCompound(compound: number): SignalDirection {
+  if (compound >= 0.05) return 'Bullish YES';
+  if (compound <= -0.05) return 'Bearish YES';
+  return 'Neutral';
 }
 
 function MarketModal({
@@ -555,24 +570,6 @@ function MarketModal({
   );
 }
 
-function ExplainerCard({
-  icon,
-  title,
-  text,
-}: {
-  icon: ReactNode;
-  title: string;
-  text: string;
-}) {
-  return (
-    <article className="explainer-card">
-      <span>{icon}</span>
-      <h3>{title}</h3>
-      <p>{text}</p>
-    </article>
-  );
-}
-
 function MarketCard({
   market,
   seriesTicker,
@@ -588,7 +585,7 @@ function MarketCard({
 }) {
   const probability = marketProbability(market);
   const kalshiUrl = marketUrl(market, seriesTitle, seriesTicker);
-  const signal = sentiment ? buildSignalFromSentiment(sentiment, sentimentCategory) : null;
+  const signal = sentiment ? buildSignalFromSentiment(sentiment) : null;
   const marketDetail = marketOutcomeDetail(market);
 
   return (
@@ -605,17 +602,17 @@ function MarketCard({
         <Metric label="Vol" value={formatMoney(marketVolume(market))} />
       </div>
 
-      {signal ? (
+      {signal && sentimentCategory ? (
         <div className={`signal-preview ${signalClass(signal.direction)}`}>
           <div className="signal-preview-header">
-            <span>Reddit signal (VADER)</span>
+            <span>Reddit sentiment · {sentimentCategory}</span>
             <strong>{signal.direction}</strong>
           </div>
-          <div className="signal-edge-row">
-            <span>Sentiment edge</span>
-            <strong>{formatEdge(signal.edge)}</strong>
-          </div>
           <div className="signal-mini-grid">
+            <div>
+              <span>Sentiment</span>
+              <strong>{formatEdge(signal.edge)}</strong>
+            </div>
             <div>
               <span>Posts</span>
               <strong>{signal.relatedPosts}</strong>
@@ -625,21 +622,13 @@ function MarketCard({
               <strong>{signal.confidence}%</strong>
             </div>
           </div>
-          <div className="topic-tags" aria-label="Sentiment category">
-            {signal.topics.map((topic) => (
-              <span key={topic}>{topic}</span>
-            ))}
-          </div>
         </div>
       ) : (
         <div className="signal-preview signal-neutral">
           <div className="signal-preview-header">
-            <span>Reddit signal</span>
+            <span>Reddit sentiment</span>
             <strong>No data</strong>
           </div>
-          <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.7 }}>
-            No matching Reddit sentiment for this category yet.
-          </p>
         </div>
       )}
 
@@ -761,29 +750,18 @@ function formatStrike(market: KalshiMarket) {
 }
 
 // Build a market signal from real per-category VADER sentiment.
-// - direction: standard VADER thresholds on the mean compound score
-// - edge:      compound mapped linearly to a +/- percentage-point shift
-//              (compound 1.0 -> +50pp, compound -0.2 -> -10pp, etc.)
-// - posts:     n_posts in that category over the collection window
+// - direction:  standard VADER thresholds on the mean compound score
+// - edge:       compound mapped linearly to a +/- percentage-point shift
+//               (compound 1.0 -> +50pp, compound -0.2 -> -10pp, etc.)
+// - posts:      n_posts in that category over the collection window
 // - confidence: share of non-neutral posts (polarity strength), in %
-function buildSignalFromSentiment(s: CategorySentiment, category?: string): MarketSignal {
+function buildSignalFromSentiment(s: CategorySentiment): MarketSignal {
   const compound = s.mean_compound;
-  const direction: SignalDirection =
-    compound >= 0.05 ? 'Bullish YES' : compound <= -0.05 ? 'Bearish YES' : 'Neutral';
-  const edge = Math.round(compound * 50);
-  const confidence = Math.round((1 - s.neutral_share) * 100);
-  const topics = [
-    category ?? 'Reddit',
-    `compound ${compound.toFixed(2)}`,
-    `${Math.round(s.bullish_share * 100)}% bull / ${Math.round(s.bearish_share * 100)}% bear`,
-  ];
-
   return {
-    direction,
-    edge,
+    direction: directionFromCompound(compound),
+    edge: Math.round(compound * 50),
     relatedPosts: s.n_posts,
-    confidence,
-    topics,
+    confidence: Math.round((1 - s.neutral_share) * 100),
   };
 }
 
