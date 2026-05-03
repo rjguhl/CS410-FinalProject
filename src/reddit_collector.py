@@ -46,8 +46,8 @@ DATE_BEFORE = "2026-04-29"
 CHUNK_DAYS = 7
 LIMIT_PER_REQUEST = 100
 
-# Output file (separate from the old March pull so previous data isn't overwritten)
-OUTPUT_FILE = "reddit_posts_apr.csv"
+# Output file (under data/raw so preprocessing + sentiment scripts agree on paths)
+OUTPUT_FILE = "data/raw/reddit_posts_apr.csv"
 
 # Be polite to the free API - seconds between requests.
 # Bumped vs. the original (1.0s) since chunking means ~5x more queries;
@@ -171,6 +171,10 @@ def save_to_csv(posts: list, filepath: str):
     if not posts:
         print("No posts to save.")
         return
+
+    parent = os.path.dirname(filepath)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
 
     fieldnames = [
         "id",

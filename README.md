@@ -21,9 +21,11 @@ We use the [Arctic Shift API](https://arctic-shift.photon-reddit.com/) to collec
 python src/reddit_collector.py
 ```
 
-This collects posts from relevant subreddits (r/economics, r/wallstreetbets, r/politics, etc.) matching keywords related to Kalshi/Polymarket contracts (Fed rate, CPI, inflation, election, etc.).
+Writes `data/raw/reddit_posts_apr.csv`. This collects posts from relevant subreddits (r/economics, r/wallstreetbets, r/politics, etc.) matching keywords related to Kalshi/Polymarket contracts (Fed rate, CPI, inflation, election, etc.).
 
 ## Pipeline
+
+To run the full Python pipeline in one shot (preprocess → sentiment → LDA), open **`notebooks/full_pipeline.ipynb`** and choose *Run All*. Optional: set `RUN_COLLECTION = True` in that notebook to re-fetch raw Reddit data (slow; requires network).
 
 1. **Data Collection** — Retrieve Reddit posts via Arctic Shift API
 2. **Preprocessing** — Tokenization, stopword removal, lemmatization
