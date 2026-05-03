@@ -1,0 +1,236 @@
+{
+  "k": 8,
+  "cv": 0.3897,
+  "topics": [
+    {
+      "id": 0,
+      "label": "Fed & Rates",
+      "top_terms": [
+        "money",
+        "years",
+        "buy",
+        "short",
+        "world"
+      ],
+      "n_posts": 176
+    },
+    {
+      "id": 1,
+      "label": "Recession & GDP",
+      "top_terms": [
+        "intel",
+        "trillion",
+        "won",
+        "companies",
+        "energy"
+      ],
+      "n_posts": 86
+    },
+    {
+      "id": 2,
+      "label": "Trade & Tariffs",
+      "top_terms": [
+        "strait",
+        "hormuz",
+        "futures",
+        "ceasefire",
+        "supply"
+      ],
+      "n_posts": 260
+    },
+    {
+      "id": 3,
+      "label": "Stock Market",
+      "top_terms": [
+        "billion",
+        "revenue",
+        "company",
+        "growth",
+        "business"
+      ],
+      "n_posts": 129
+    },
+    {
+      "id": 4,
+      "label": "CPI & Prices",
+      "top_terms": [
+        "flow",
+        "momentum",
+        "week",
+        "gold",
+        "trading"
+      ],
+      "n_posts": 150
+    },
+    {
+      "id": 5,
+      "label": "Oil & Energy",
+      "top_terms": [
+        "fed",
+        "inflation",
+        "rates",
+        "jobs",
+        "fund"
+      ],
+      "n_posts": 178
+    },
+    {
+      "id": 6,
+      "label": "AI & Tech Policy",
+      "top_terms": [
+        "global",
+        "economy",
+        "news",
+        "data",
+        "energy"
+      ],
+      "n_posts": 328
+    },
+    {
+      "id": 7,
+      "label": "Iran & Geopolitics",
+      "top_terms": [
+        "arpu",
+        "growth",
+        "revenue",
+        "int",
+        "quarter"
+      ],
+      "n_posts": 83
+    },
+    {
+      "id": 8,
+      "label": "Jobs & Labor",
+      "top_terms": [
+        "inflation",
+        "fed",
+        "expenses",
+        "powell",
+        "economy"
+      ],
+      "n_posts": 181
+    },
+    {
+      "id": 9,
+      "label": "Debt & Fiscal Policy",
+      "top_terms": [
+        "earnings",
+        "years",
+        "revenue",
+        "companies",
+        "stay"
+      ],
+      "n_posts": 125
+    }
+  ],
+  "signals": [
+    {
+      "contract": "Inflation",
+      "price_cents": 50,
+      "avg_compound": -0.261,
+      "edge_pp": -13.0,
+      "strength_pct": 13.2,
+      "rec": "BUY NO",
+      "n_posts": 288,
+      "bullish": 116,
+      "bearish": 154,
+      "neutral": 18
+    },
+    {
+      "contract": "Growth",
+      "price_cents": 50,
+      "avg_compound": -0.254,
+      "edge_pp": -12.7,
+      "strength_pct": 7.0,
+      "rec": "BUY NO",
+      "n_posts": 114,
+      "bullish": 52,
+      "bearish": 60,
+      "neutral": 2
+    },
+    {
+      "contract": "Oil and energy",
+      "price_cents": 50,
+      "avg_compound": -0.194,
+      "edge_pp": -9.7,
+      "strength_pct": 10.1,
+      "rec": "BUY NO",
+      "n_posts": 356,
+      "bullish": 149,
+      "bearish": 185,
+      "neutral": 22
+    },
+    {
+      "contract": "Jobs & Economy",
+      "price_cents": 50,
+      "avg_compound": -0.138,
+      "edge_pp": -6.9,
+      "strength_pct": 10.7,
+      "rec": "BUY NO",
+      "n_posts": 121,
+      "bullish": 43,
+      "bearish": 56,
+      "neutral": 22
+    },
+    {
+      "contract": "Housing",
+      "price_cents": 50,
+      "avg_compound": 0.121,
+      "edge_pp": 6.1,
+      "strength_pct": 15.0,
+      "rec": "BUY YES",
+      "n_posts": 20,
+      "bullish": 11,
+      "bearish": 8,
+      "neutral": 1
+    },
+    {
+      "contract": "Fed",
+      "price_cents": 50,
+      "avg_compound": -0.102,
+      "edge_pp": -5.1,
+      "strength_pct": 1.2,
+      "rec": "BUY NO",
+      "n_posts": 165,
+      "bullish": 79,
+      "bearish": 77,
+      "neutral": 9
+    },
+    {
+      "contract": "Econ Daily",
+      "price_cents": 50,
+      "avg_compound": -0.074,
+      "edge_pp": -3.7,
+      "strength_pct": 9.8,
+      "rec": "BUY NO",
+      "n_posts": 599,
+      "bullish": 311,
+      "bearish": 252,
+      "neutral": 36
+    },
+    {
+      "contract": "Global Central Banks",
+      "price_cents": 50,
+      "avg_compound": 0.02,
+      "edge_pp": 1.0,
+      "strength_pct": 15.0,
+      "rec": "HOLD",
+      "n_posts": 20,
+      "bullish": 9,
+      "bearish": 6,
+      "neutral": 5
+    },
+    {
+      "contract": "GDP",
+      "price_cents": 50,
+      "avg_compound": 0.016,
+      "edge_pp": 0.8,
+      "strength_pct": 8.0,
+      "rec": "HOLD",
+      "n_posts": 25,
+      "bullish": 13,
+      "bearish": 11,
+      "neutral": 1
+    }
+  ]
+}
